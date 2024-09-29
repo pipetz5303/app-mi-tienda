@@ -1,0 +1,117 @@
+--traer el ultimo grupo registrado en una mesa 
+
+SELECT TOP 1 idGrupo,idMesa,horaLlegada,horaSalida FROM grupo
+WHERE idMesa = 1
+ORDER BY horaLlegada DESC;
+
+
+--trae las personas segun el grupo
+SELECT persona.idTipoDNI, persona.idDNIPersona, nombre, apellido FROM persona_grupo 
+INNER JOIN persona ON persona.idDNIPersona = persona_grupo.idPersona
+WHERE idGrupo = (SELECT TOP 1 idGrupo FROM grupo
+WHERE idMesa = 1
+ORDER BY horaLlegada DESC);
+
+
+--registrar la persona 
+INSERT INTO persona (idDNIPersona,nombre,apellido,idTipoDNI) 
+VALUES ('1030576147','Felipe','Castellanos', 'CC');
+
+--BUSCAR A LA PERSONA
+SELECT idDNIPersona
+FROM persona
+WHERE idDNIPersona = 1030576147;
+
+--ingresa  grupo
+INSERT INTO grupo (idMesa, horaLlegada) VALUES (2,SYSDATETIMEOFFSET());
+
+
+--ingresa en un grupo una persona
+INSERT INTO persona_grupo (idGrupo,idPersona, horaLlegada) 
+VALUES (1,1030576147,SYSDATETIMEOFFSET());
+
+--EDICION de tablas
+1-
+DECLARE @sql NVARCHAR(MAX);
+
+-- Construir un script para eliminar todas las restricciones de clave foránea de la tabla 'mesa'
+SELECT @sql = COALESCE(@sql + '; ', '') + 'ALTER TABLE ' + OBJECT_NAME(parent_object_id) + ' DROP CONSTRAINT ' + name
+FROM sys.foreign_keys
+WHERE referenced_object_id = OBJECT_ID('grupo');
+
+-- Ejecutar el script
+EXEC sp_executesql @sql;
+1-
+
+
+//poner autoincremental
+ALTER TABLE [App_Mi_Tienda].[dbo].[pedido]
+DROP CONSTRAINT FK_pedido_persona_grupo;
+
+ALTER TABLE [App_Mi_Tienda].[dbo].[persona_grupo]
+DROP CONSTRAINT PK_persona_grupo;
+
+-- Elimina la columna 'idGrupoPersona' si ya existe
+ALTER TABLE [App_Mi_Tienda].[dbo].[persona_grupo]
+DROP COLUMN idGrupoPersona;
+
+-- Agrega la columna 'idGrupoPersona' como una columna de identidad
+ALTER TABLE [App_Mi_Tienda].[dbo].[persona_grupo]
+ADD idGrupoPersona INT IDENTITY(1,1) PRIMARY KEY;
+
+
+Buscar algo 
+SELECT TOP (1000) persona_grupo.idGrupo, persona.idTipoDNI,idPersona, nombre, apellido, persona_grupo.horaLlegada, mesa.numeroMesa
+  FROM persona_grupo 
+  INNER JOIN grupo ON grupo.idGrupo = persona_grupo.idGrupo
+  INNER JOIN persona ON persona.idDNIPersona = persona_grupo.idPersona
+  INNER JOIN tipo_DNI ON tipo_DNI.idTipoDNI = persona.idTipoDNI
+  INNER JOIN mesa ON mesa.idMesa = grupo.idMesa;
+
+insertar pedido desde consola
+INSERT INTO pedido (idPersona_Grupo, fechaPedido, estado)
+VALUES (1, SYSDATETIMEOFFSET(),1);
+
+insertar pedido dsde app
+INSERT INTO pedido (idPersona_Grupo, fechaPedido, estado)
+VALUES ((
+SELECT TOP 1 idGrupoPersona 
+                     FROM persona_grupo 
+                     INNER JOIN persona ON persona_grupo.idPersona = persona.idDNIPersona
+                     WHERE CONCAT(persona.nombre, ' ', persona.apellido) 
+					 LIKE 'Ian Sanchez'
+                     ORDER BY idGrupo DESC),
+SYSDATETIMEOFFSET(),1);
+
+
+insertar detalle pedido
+INSERT INTO pedido_producto (idPedido,idProducto,precioFacturado, cantidad)
+VALUES (1, 3,6500,2);
+
+saber idPersona_Grupo
+SELECT TOP 1 idGrupoPersona 
+FROM persona_grupo 
+INNER JOIN persona ON persona_grupo.idPersona = persona.idDNIPersona
+WHERE CONCAT(persona.nombre, ' ', persona.apellido) LIKE 'Felipe Castellanos'
+ORDER BY idGrupo DESC;
+
+//mostrar en mostrar pedidos 
+SELECT pedido.idPedido, numeroMesa, grupo.idGrupo, nombre, apellido, fechaPedido, estado, SUM(pedido_producto.precioFacturado) AS 'Total' FROM pedido
+INNER JOIN persona_grupo ON pedido.idPersona_Grupo = persona_grupo.idGrupoPersona
+INNER JOIN persona ON persona.idDNIPersona = persona_grupo.idPersona
+INNER JOIN grupo ON  grupo.idGrupo = persona_grupo.idGrupo
+INNER JOIN mesa ON mesa.idMesa = grupo.idMesa
+INNER JOIN pedido_producto ON pedido_producto.idPedido = pedido.idPedido
+GROUP BY pedido.idPedido,
+    mesa.numeroMesa,
+    grupo.idGrupo,
+    nombre,
+    apellido,
+    fechaPedido,
+    estado;
+
+//cambiar todos los estados de un grupo
+UPDATE pedido  SET estado  = 0 FROM pedido INNER JOIN persona_grupo ON persona_grupo.idGrupoPersona = pedido.idPersona_Grupo  WHERE idGrupo = 1;
+
+//cerrar grupo marcando hora de salida}
+UPDATE grupo  SET horaSalida  = SYSDATETIMEOFFSET() WHERE idGrupo = 1;
